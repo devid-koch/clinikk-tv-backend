@@ -2,6 +2,8 @@ const { StatusCodes } = require("http-status-codes");
 const { Sequelize } = require("sequelize");
 const Media = require("../models/mediaModel");
 const sendResponse = require("../utils/response");
+const { getHost, normalizeFilePath } = require("../utils/fileUtils");
+
 
 exports.uploadMedia = async (req, res) => {
     try {
@@ -34,7 +36,20 @@ exports.uploadMedia = async (req, res) => {
 exports.getAllMedia = async (req, res) => {
     try {
         const mediaList = await Media.findAll();
-        sendResponse(res, StatusCodes.OK, "Media List", mediaList)
+
+        if (!mediaList || mediaList.length === 0) {
+            return sendResponse(res, StatusCodes.NOT_FOUND, "No media found.");
+        }
+
+        const host = getHost(req);
+
+        const mediaWithFileUrls = mediaList.map(media=>{
+            const normalizedFilePath = normalizeFilePath(media.filePath);
+            const filePath = `${host}/${normalizedFilePath}`;
+            return { ...media.toJSON(),filePath,}
+        })
+
+        sendResponse(res, StatusCodes.OK, "Media List", mediaWithFileUrls)
     } catch (error) {
         sendResponse(res, StatusCodes.INTERNAL_SERVER_ERROR, "Server error.");
     }
@@ -44,6 +59,7 @@ exports.getMediaById = async (req, res) => {
     
     try {
         const { id } = req.params;
+        
 
         if (!Sequelize.Validator.isUUID(id)) {
             return sendResponse(res, StatusCodes.BAD_REQUEST, "Invalid ID format.");
@@ -54,7 +70,11 @@ exports.getMediaById = async (req, res) => {
         if (!media) {
             return sendResponse(res, StatusCodes.NOT_FOUND, "Media not found.");
         }
-        sendResponse(res, StatusCodes.OK, "Media found.", { filePath: media.filePath });
+        const host = getHost(req);
+
+        const normalizedFilePath = normalizeFilePath(media.filePath);
+        const fileUrl = `${host}/${normalizedFilePath}`;
+        sendResponse(res, StatusCodes.OK, "Media found.", { filePath: fileUrl });
     } catch (error) {
         sendResponse(res, StatusCodes.INTERNAL_SERVER_ERROR, "Server error.");
     }
